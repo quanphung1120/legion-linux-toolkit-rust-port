@@ -4,6 +4,9 @@ A PyQt6 GUI dashboard for Lenovo Legion laptops.
 Hardware backend: [LenovoLegionLinux (LLL)](https://github.com/johnfanv2/LenovoLegionLinux)  
 KDE Plasma 6 · Wayland — works on any Arch-based distro.
 
+I Still would like to let you know that this software GUI toolkit for Linux is still in beta or in alpha (can't say for sure) :hehe
+If anyone wants to help on this projects making this into working stable release, please feel free to contact me through discord (water_cachyos)
+
 ![version](https://img.shields.io/badge/version-v0.6.3--LLL-red?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Linux-blue?style=flat-square)
 ![python](https://img.shields.io/badge/python-PyQt6-green?style=flat-square)
