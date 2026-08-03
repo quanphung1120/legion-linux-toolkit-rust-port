@@ -37,6 +37,20 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
   048d:c103 variant), Overclock page (replaced by the three PPT sliders),
   Actions page, L1 AI Engine toggle.
 
+## Backlog (not yet planned)
+
+- **Plan 002 (on request): LLT-style Custom-profile tuning.** Scope agreed
+  2026-08-03: (a) named presets over the tunables (base preset + tweak +
+  persist in legiond, optional AC/battery auto-switch); (b) make the tuning
+  UI dynamic — one control per attribute advertised in
+  `/sys/class/firmware-attributes/lenovo-wmi-other-0/attributes/` (backend
+  `list_all()` and daemon are already generic; only GUI sliders and the CLI
+  `ppt` keys are hardcoded to spl/sppt/fppt), so `cpu_temp`, `gpu_temp`,
+  `gpu_nv_ctgp` etc. appear automatically when the kernel ships them;
+  (c) software fan-curve scaffolding behind feature detection
+  (`fanX_target`-based control loop; untestable until the kernel exposes the
+  fan hwmon). True EC-level fan curves remain kernel work, out of scope.
+
 ## Findings considered and rejected
 
 - **Keyboard RGB support**: rejected — the 82WM has the white-backlight
