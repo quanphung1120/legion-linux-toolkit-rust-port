@@ -38,9 +38,11 @@ command -v cargo &>/dev/null || err "cargo not found — install Rust via your p
 ok "Build dependencies ready"
 
 # ── 2. Sanity-check the kernel interface ─────────────────────────────────────
-if [[ ! -e /sys/class/platform-profile/platform-profile-0/profile ]]; then
-    warn "No platform-profile device found. This toolkit needs the upstream"
-    warn "lenovo-wmi-gamezone driver (kernel 6.17+; 6.19+ recommended)."
+# The kernel numbers platform-profile-N by registration order, so match on the
+# driver name rather than an index (LenovoLegionLinux registers one too).
+if ! grep -qx lenovo-wmi-gamezone /sys/class/platform-profile/*/name 2>/dev/null; then
+    warn "No lenovo-wmi-gamezone platform-profile device found. This toolkit needs"
+    warn "the upstream lenovo-wmi-gamezone driver (kernel 6.17+; 6.19+ recommended)."
     warn "Installing anyway — features will be hidden until the driver is present."
 fi
 

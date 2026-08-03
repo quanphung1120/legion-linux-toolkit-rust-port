@@ -19,7 +19,7 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd};
 
-use crate::profile::{self, PROFILE_FILE, PowerProfile};
+use crate::profile::{self, PowerProfile};
 use crate::{HwError, Result, SysRoot};
 
 /// An open handle to the `profile` attribute, armed for `POLLPRI`.
@@ -34,10 +34,15 @@ pub struct ProfileWatchFd {
 impl ProfileWatchFd {
     /// Open the profile attribute and clear its pending state.
     ///
+    /// The attribute is the one belonging to the device
+    /// [`profile::device_dir`] discovers by name, so the watcher never ends up
+    /// on a second handler's file (see [`crate::profile`]).
+    ///
     /// The initial read is what arms `POLLPRI`; without it the descriptor
     /// reports ready immediately and forever.
     pub fn open(root: &SysRoot) -> Result<Self> {
-        let file = File::open(root.path(PROFILE_FILE)).map_err(HwError::from_io)?;
+        let rel = profile::profile_file(root).ok_or(HwError::NotSupported)?;
+        let file = File::open(root.path(&rel)).map_err(HwError::from_io)?;
         let mut watcher = Self { file };
         let _ = watcher.consume()?;
         Ok(watcher)

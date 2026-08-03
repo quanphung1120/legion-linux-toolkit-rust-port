@@ -91,7 +91,9 @@ and the 11-language selector. This is an English-only tool for Legion laptops.
 - **Kernel 6.17+**; 6.19+ recommended (`charge_types` and the PPT firmware
   attributes). Verified on Ubuntu 26.04's 7.0 kernel.
 - `lenovo-wmi-gamezone` loaded — check with
-  `cat /sys/class/platform-profile/platform-profile-0/name`.
+  `grep . /sys/class/platform-profile/*/name`. The index is not fixed: if you
+  also run the out-of-tree LenovoLegionLinux module it registers a second
+  handler, and the toolkit picks the `lenovo-wmi-gamezone` one by name.
 - systemd, D-Bus and polkit.
 - Rust 1.93+ to build from source (Ubuntu 26.04's `cargo` is new enough).
 

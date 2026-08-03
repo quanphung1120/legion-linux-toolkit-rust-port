@@ -1,5 +1,15 @@
-//! Platform profile (power mode) over
-//! `/sys/class/platform-profile/platform-profile-0/`.
+//! Platform profile (power mode) over `/sys/class/platform-profile/`.
+//!
+//! The device this module drives is discovered *by name*, never by index. The
+//! kernel numbers `platform-profile-N` in registration order, and more than one
+//! handler can be registered at once: installing the out-of-tree
+//! LenovoLegionLinux `legion_laptop` module adds a second handler named
+//! `lenovo-legion` alongside the upstream `lenovo-wmi-gamezone` one. Module
+//! load order is not guaranteed across boots, so `platform-profile-0` is not a
+//! stable identifier — on one boot it is gamezone, on the next it could be the
+//! LLL handler, whose `choices` lack `max-power` and whose writes drive a
+//! different code path entirely. [`device_dir`] therefore scans the class and
+//! picks the directory whose `name` reads `lenovo-wmi-gamezone`.
 //!
 //! Driver `lenovo-wmi-gamezone`. `choices` on the 82WM reads
 //! `low-power balanced performance max-power custom`.
@@ -8,10 +18,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{HwError, Result, SysRoot};
 
-const DIR: &str = "sys/class/platform-profile/platform-profile-0";
+const CLASS_DIR: &str = "sys/class/platform-profile";
 
-/// Relative path of the `profile` file — also used by the POLLPRI watcher.
-pub const PROFILE_FILE: &str = "sys/class/platform-profile/platform-profile-0/profile";
+/// `name` of the upstream handler this toolkit targets.
+const GAMEZONE: &str = "lenovo-wmi-gamezone";
 
 /// The power modes this laptop exposes, in the order Lenovo presents them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,19 +119,50 @@ impl LedColor {
     }
 }
 
+/// The platform-profile device directory to drive, relative to the
+/// [`SysRoot`] (e.g. `sys/class/platform-profile/platform-profile-1`).
+///
+/// Prefers the device whose `name` is `lenovo-wmi-gamezone`. When no device
+/// carries that name — a machine without the upstream driver, or a fake tree
+/// that omits `name` — the lexicographically first device is used, which is
+/// the historical `platform-profile-0` behaviour. `None` means the class is
+/// absent or empty, i.e. no platform-profile support.
+///
+/// The scan is a single small `readdir`, so callers resolve per access rather
+/// than caching: hotplugging a handler (LLL loaded after boot) is picked up
+/// without a restart.
+pub fn device_dir(root: &SysRoot) -> Option<String> {
+    let mut fallback = None;
+    for entry in root.list_dir(CLASS_DIR) {
+        let rel = format!("{CLASS_DIR}/{entry}");
+        if root.read_opt(&format!("{rel}/name")).as_deref() == Some(GAMEZONE) {
+            return Some(rel);
+        }
+        fallback.get_or_insert(rel);
+    }
+    fallback
+}
+
+/// Resolved path of the `profile` file — also used by the POLLPRI watcher.
+pub fn profile_file(root: &SysRoot) -> Option<String> {
+    device_dir(root).map(|dir| format!("{dir}/profile"))
+}
+
 /// Is the platform-profile interface present at all?
 pub fn available(root: &SysRoot) -> bool {
-    root.exists(PROFILE_FILE)
+    profile_file(root).is_some_and(|f| root.exists(&f))
 }
 
 /// The driver backing the platform-profile device (`lenovo-wmi-gamezone`).
 pub fn driver_name(root: &SysRoot) -> Option<String> {
-    root.read_opt(&format!("{DIR}/name"))
+    let dir = device_dir(root)?;
+    root.read_opt(&format!("{dir}/name"))
 }
 
 /// Profiles this machine's firmware advertises, in kernel order.
 pub fn choices(root: &SysRoot) -> Result<Vec<PowerProfile>> {
-    let raw = root.read(&format!("{DIR}/choices"))?;
+    let dir = device_dir(root).ok_or(HwError::NotSupported)?;
+    let raw = root.read(&format!("{dir}/choices"))?;
     raw.split_whitespace()
         .map(PowerProfile::from_sysfs)
         .collect()
@@ -129,12 +170,14 @@ pub fn choices(root: &SysRoot) -> Result<Vec<PowerProfile>> {
 
 /// The active profile.
 pub fn get(root: &SysRoot) -> Result<PowerProfile> {
-    PowerProfile::from_sysfs(&root.read(PROFILE_FILE)?)
+    let file = profile_file(root).ok_or(HwError::NotSupported)?;
+    PowerProfile::from_sysfs(&root.read(&file)?)
 }
 
 /// Switch profile.
 pub fn set(root: &SysRoot, profile: PowerProfile) -> Result<()> {
-    root.write(PROFILE_FILE, profile.as_sysfs())
+    let file = profile_file(root).ok_or(HwError::NotSupported)?;
+    root.write(&file, profile.as_sysfs())
 }
 
 #[cfg(test)]
