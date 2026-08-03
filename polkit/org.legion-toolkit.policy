@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Legion Linux Toolkit</vendor>
+  <vendor_url>https://github.com/VVAT3R/legion-linux-toolkit</vendor_url>
+  <action id="org.legiontoolkit.control">
+    <description>Control Legion laptop hardware settings</description>
+    <message>Authentication required to change Legion hardware settings</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+</policyconfig>
