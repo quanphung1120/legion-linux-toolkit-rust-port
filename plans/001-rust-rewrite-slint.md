@@ -304,10 +304,20 @@ Modules and their public API (all feature-detecting — return
   Custom } ↔ sysfs strings `low-power`/`balanced`/`performance`/`max-power`/
   `custom`; `choices()`, `get()`, `set()`. Include the LED-color metadata
   (blue/white/red/purple/purple) as a method — the tray uses it.
-- `profile_watch.rs` — blocking `wait_for_change(&SysRoot, timeout)` using
-  `poll(2)` with `POLLPRI | POLLERR` on the `profile` file (open, read to
-  clear, poll, re-read). Use the `rustix` or `nix` crate for `poll`. Only the
-  **daemon** runs this watcher; clients receive D-Bus signals.
+- `profile_watch.rs` — **(owner decision 2026-08-03: the async design is
+  required, not optional.)** `legion-hw` exposes a small sync primitive:
+  `ProfileWatchFd::open(&SysRoot)` opens the `profile` file, does the initial
+  read (clearing pending state), and returns the raw fd plus a `consume()`
+  helper that seeks to 0 and re-reads after each wakeup. The **daemon** —
+  the only watcher — registers that fd on tokio's reactor via
+  `tokio::io::unix::AsyncFd` with `Interest::PRIORITY` (epoll `EPOLLPRI`
+  under the hood) and awaits it as an ordinary async task composed with
+  `tokio::select!` for shutdown; no dedicated blocking thread, no channel
+  bridge. Do NOT use inotify/notify crates — sysfs attributes never generate
+  inotify events; POLLPRI/EPOLLPRI is the only wakeup mechanism. Testing
+  note: regular files in the fake sysfs tree cannot generate POLLPRI, so the
+  watcher is verified on hardware only (the Fn+Q check in step 3's
+  verification) — unit tests cover `consume()`'s parse path, not the wakeup.
 - `firmware_attrs.rs` — `PptAttr` { Spl, Sppt, Fppt } with
   `read(&SysRoot, attr) -> AttrInfo { current, default, min, max }` and
   `write(&SysRoot, attr, watts)`; directory-scan `available()` so future
