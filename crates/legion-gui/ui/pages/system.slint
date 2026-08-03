@@ -1,0 +1,115 @@
+import { Palette, Metrics, Card, StatRow, ToggleRow } from "../theme.slint";
+
+export component SystemPage inherits VerticalLayout {
+    in property <bool> has-fn-lock;
+    in property <bool> has-camera;
+    in property <bool> has-usb-charging;
+    in property <bool> has-backlight;
+    in property <bool> has-boost;
+
+    in property <bool> fn-lock;
+    in property <bool> camera;
+    in property <bool> usb-charging;
+    in property <bool> boost;
+    in property <int> backlight;
+    in property <int> backlight-max;
+
+    in property <string> fan-mode;
+    in property <string> fan-rpm;
+    in property <string> kernel-note;
+
+    callback set-fn-lock(bool);
+    callback set-camera(bool);
+    callback set-usb-charging(bool);
+    callback set-boost(bool);
+    callback set-backlight(int);
+
+    spacing: Metrics.gap;
+
+    Card {
+        title: "Switches";
+
+        if has-fn-lock: ToggleRow {
+            label: "Fn Lock";
+            hint: "Function keys act as F1–F12 without holding Fn";
+            checked: root.fn-lock;
+            toggled(v) => { root.set-fn-lock(v); }
+        }
+
+        if has-camera: ToggleRow {
+            label: "Camera";
+            hint: "Cut power to the webcam";
+            checked: root.camera;
+            toggled(v) => { root.set-camera(v); }
+        }
+
+        if has-usb-charging: ToggleRow {
+            label: "Always-on USB charging";
+            hint: "Keep charging devices while the laptop is asleep";
+            checked: root.usb-charging;
+            toggled(v) => { root.set-usb-charging(v); }
+        }
+
+        if has-boost: ToggleRow {
+            label: "CPU boost";
+            hint: "Allow clocks above the base frequency";
+            checked: root.boost;
+            toggled(v) => { root.set-boost(v); }
+        }
+    }
+
+    if has-backlight: Card {
+        title: "Keyboard Backlight";
+
+        HorizontalLayout {
+            spacing: 8px;
+
+            for level in [0, 1, 2]: TouchArea {
+                height: 38px;
+                horizontal-stretch: 1;
+                // A machine could report a lower max; do not offer levels it
+                // would reject.
+                visible: level <= root.backlight-max;
+                clicked => { root.set-backlight(level); }
+
+                Rectangle {
+                    border-radius: Metrics.radius;
+                    background: level == root.backlight
+                        ? Palette.accent-dim
+                        : (parent.has-hover ? Palette.surface-alt : transparent);
+                    border-width: 1px;
+                    border-color: level == root.backlight ? Palette.accent : Palette.border;
+
+                    Text {
+                        text: level == 0 ? "Off" : (level == 1 ? "Low" : "High");
+                        color: Palette.text;
+                        font-size: 13px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: "This model has a white-only backlight with three levels. Fn+Space cycles it.";
+            color: Palette.text-dim;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+    }
+
+    Card {
+        title: "Cooling";
+        StatRow { label: "Fan mode"; value: root.fan-mode; }
+        StatRow { label: "Fan speed"; value: root.fan-rpm; }
+        Text {
+            text: root.kernel-note;
+            color: Palette.text-dim;
+            font-size: 11px;
+            wrap: word-wrap;
+        }
+    }
+
+    Rectangle { vertical-stretch: 1; }
+}

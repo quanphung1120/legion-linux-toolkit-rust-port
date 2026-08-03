@@ -1,0 +1,348 @@
+import { Palette, Metrics } from "theme.slint";
+import { HomePage } from "pages/home.slint";
+import { BatteryPage } from "pages/battery.slint";
+import { CustomPage } from "pages/custom.slint";
+import { SystemPage } from "pages/system.slint";
+import { AboutPage } from "pages/about.slint";
+
+component SidebarItem inherits TouchArea {
+    in property <string> label;
+    in property <bool> selected;
+
+    height: 40px;
+
+    Rectangle {
+        border-radius: Metrics.radius;
+        background: root.selected
+            ? Palette.accent-dim
+            : (root.has-hover ? Palette.surface-alt : transparent);
+
+        HorizontalLayout {
+            padding-left: 12px;
+            Text {
+                text: root.label;
+                color: root.selected ? white : Palette.text;
+                font-size: 13px;
+                font-weight: root.selected ? 700 : 400;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "Legion Toolkit";
+    background: Palette.bg;
+    preferred-width: 900px;
+    preferred-height: 620px;
+    min-width: 720px;
+    min-height: 520px;
+
+    // ── connection state ────────────────────────────────────────────────────
+    in property <bool> daemon-connected: false;
+    in property <string> daemon-error;
+
+    // ── shared ──────────────────────────────────────────────────────────────
+    in property <image> logo;
+    in property <string> app-version;
+    in property <string> daemon-version;
+    in property <string> machine;
+    in property <string> family;
+    in property <string> profile-driver;
+
+    // ── home / profile ──────────────────────────────────────────────────────
+    in property <bool> profile-supported;
+    in property <[string]> profile-choices;
+    in property <[string]> profile-labels;
+    // Kernel token (`balanced`), used for selection comparisons.
+    in property <string> current-profile;
+    // Friendly name for display.
+    in property <string> current-profile-label;
+    in property <brush> profile-color;
+    in property <string> cpu-temp;
+    in property <string> cpu-freq;
+    in property <string> cpu-governor;
+    in property <string> fan-rpm;
+    in property <string> battery-capacity;
+    in property <string> battery-status;
+    in property <string> ac-state;
+
+    // ── battery ─────────────────────────────────────────────────────────────
+    in property <bool> battery-supported;
+    in property <string> battery-mode;
+    in property <[string]> battery-choices;
+    in property <[string]> battery-labels;
+    in property <[string]> battery-hints;
+    in property <string> battery-health;
+    in property <string> battery-cycles;
+    in property <string> battery-power;
+    in property <string> battery-voltage;
+
+    // ── custom / ppt ────────────────────────────────────────────────────────
+    in property <bool> ppt-supported;
+    in property <bool> custom-active;
+    in property <int> spl;
+    in property <int> spl-min;
+    in property <int> spl-max;
+    in property <int> sppt;
+    in property <int> sppt-min;
+    in property <int> sppt-max;
+    in property <int> fppt;
+    in property <int> fppt-min;
+    in property <int> fppt-max;
+
+    // ── system ──────────────────────────────────────────────────────────────
+    in property <bool> has-fn-lock;
+    in property <bool> has-camera;
+    in property <bool> has-usb-charging;
+    in property <bool> has-backlight;
+    in property <bool> has-boost;
+    in property <bool> fn-lock;
+    in property <bool> camera;
+    in property <bool> usb-charging;
+    in property <bool> boost;
+    in property <int> backlight;
+    in property <int> backlight-max: 2;
+    in property <string> fan-mode;
+    in property <string> kernel-note;
+
+    // ── toast ───────────────────────────────────────────────────────────────
+    in property <string> toast;
+
+    // ── callbacks ───────────────────────────────────────────────────────────
+    callback select-profile(string);
+    callback select-battery-mode(string);
+    callback set-ppt(string, int);
+    callback set-fn-lock(bool);
+    callback set-camera(bool);
+    callback set-usb-charging(bool);
+    callback set-boost(bool);
+    callback set-backlight(int);
+    callback dismiss-toast();
+
+    property <int> page: 0;
+
+    // The GUI is a pure client: with no daemon there is nothing it may write,
+    // so it says so plainly instead of showing a dashboard that cannot act.
+    if !daemon-connected: VerticalLayout {
+        alignment: center;
+        padding: 40px;
+        spacing: 14px;
+
+        Image {
+            source: root.logo;
+            height: 72px;
+            image-fit: contain;
+        }
+        Text {
+            text: "legiond is not running";
+            color: Palette.text;
+            font-size: 20px;
+            font-weight: 700;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: "Start the daemon, then reopen this window:";
+            color: Palette.text-dim;
+            font-size: 13px;
+            horizontal-alignment: center;
+        }
+        Rectangle {
+            height: 40px;
+            border-radius: Metrics.radius;
+            background: Palette.surface;
+            border-width: 1px;
+            border-color: Palette.border;
+            Text {
+                text: "sudo systemctl enable --now legiond";
+                color: Palette.accent;
+                font-size: 13px;
+                font-family: "monospace";
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+        if root.daemon-error != "": Text {
+            text: root.daemon-error;
+            color: Palette.text-dim;
+            font-size: 11px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+
+    if daemon-connected: HorizontalLayout {
+        padding: Metrics.pad;
+        spacing: Metrics.gap;
+
+        // ── sidebar ─────────────────────────────────────────────────────────
+        VerticalLayout {
+            width: 172px;
+            spacing: 4px;
+
+            HorizontalLayout {
+                height: 52px;
+                spacing: 8px;
+                Image {
+                    source: root.logo;
+                    width: 28px;
+                    height: 28px;
+                    image-fit: contain;
+                    y: (parent.height - self.height) / 2;
+                }
+                Text {
+                    text: "Legion Toolkit";
+                    color: Palette.text;
+                    font-size: 15px;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                }
+            }
+
+            SidebarItem {
+                label: "Home";
+                selected: root.page == 0;
+                clicked => { root.page = 0; }
+            }
+            SidebarItem {
+                label: "Battery";
+                selected: root.page == 1;
+                clicked => { root.page = 1; }
+            }
+            SidebarItem {
+                label: "Power Limits";
+                selected: root.page == 2;
+                clicked => { root.page = 2; }
+            }
+            SidebarItem {
+                label: "System";
+                selected: root.page == 3;
+                clicked => { root.page = 3; }
+            }
+            SidebarItem {
+                label: "About";
+                selected: root.page == 4;
+                clicked => { root.page = 4; }
+            }
+
+            Rectangle { vertical-stretch: 1; }
+
+            Text {
+                text: root.current-profile-label != ""
+                    ? "Mode: " + root.current-profile-label
+                    : "";
+                color: Palette.text-dim;
+                font-size: 11px;
+            }
+        }
+
+        // ── page stack ──────────────────────────────────────────────────────
+        Rectangle {
+            horizontal-stretch: 1;
+
+            if root.page == 0: HomePage {
+                profile-choices: root.profile-choices;
+                profile-labels: root.profile-labels;
+                current-profile: root.current-profile;
+                profile-color: root.profile-color;
+                profile-supported: root.profile-supported;
+                cpu-temp: root.cpu-temp;
+                cpu-freq: root.cpu-freq;
+                cpu-governor: root.cpu-governor;
+                fan-rpm: root.fan-rpm;
+                battery-capacity: root.battery-capacity;
+                battery-status: root.battery-status;
+                ac-state: root.ac-state;
+                select-profile(p) => { root.select-profile(p); }
+            }
+
+            if root.page == 1: BatteryPage {
+                supported: root.battery-supported;
+                mode: root.battery-mode;
+                mode-choices: root.battery-choices;
+                mode-labels: root.battery-labels;
+                mode-hints: root.battery-hints;
+                capacity: root.battery-capacity;
+                status: root.battery-status;
+                health: root.battery-health;
+                cycles: root.battery-cycles;
+                power-draw: root.battery-power;
+                voltage: root.battery-voltage;
+                ac-state: root.ac-state;
+                select-mode(m) => { root.select-battery-mode(m); }
+            }
+
+            if root.page == 2: CustomPage {
+                supported: root.ppt-supported;
+                custom-active: root.custom-active;
+                spl: root.spl;
+                spl-min: root.spl-min;
+                spl-max: root.spl-max;
+                sppt: root.sppt;
+                sppt-min: root.sppt-min;
+                sppt-max: root.sppt-max;
+                fppt: root.fppt;
+                fppt-min: root.fppt-min;
+                fppt-max: root.fppt-max;
+                set-ppt(a, v) => { root.set-ppt(a, v); }
+                switch-to-custom() => { root.select-profile("custom"); }
+            }
+
+            if root.page == 3: SystemPage {
+                has-fn-lock: root.has-fn-lock;
+                has-camera: root.has-camera;
+                has-usb-charging: root.has-usb-charging;
+                has-backlight: root.has-backlight;
+                has-boost: root.has-boost;
+                fn-lock: root.fn-lock;
+                camera: root.camera;
+                usb-charging: root.usb-charging;
+                boost: root.boost;
+                backlight: root.backlight;
+                backlight-max: root.backlight-max;
+                fan-mode: root.fan-mode;
+                fan-rpm: root.fan-rpm;
+                kernel-note: root.kernel-note;
+                set-fn-lock(v) => { root.set-fn-lock(v); }
+                set-camera(v) => { root.set-camera(v); }
+                set-usb-charging(v) => { root.set-usb-charging(v); }
+                set-boost(v) => { root.set-boost(v); }
+                set-backlight(v) => { root.set-backlight(v); }
+            }
+
+            if root.page == 4: AboutPage {
+                version: root.app-version;
+                daemon-version: root.daemon-version;
+                machine: root.machine;
+                family: root.family;
+                profile-driver: root.profile-driver;
+                logo: root.logo;
+            }
+        }
+    }
+
+    // ── toast ───────────────────────────────────────────────────────────────
+    if toast != "": TouchArea {
+        y: root.height - self.height - 20px;
+        height: 44px;
+        clicked => { root.dismiss-toast(); }
+
+        Rectangle {
+            width: min(root.width - 40px, 460px);
+            x: (parent.width - self.width) / 2;
+            border-radius: Metrics.radius;
+            background: Palette.surface-alt;
+            border-width: 1px;
+            border-color: Palette.accent;
+
+            Text {
+                text: root.toast;
+                color: Palette.text;
+                font-size: 12px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                wrap: word-wrap;
+            }
+        }
+    }
+}

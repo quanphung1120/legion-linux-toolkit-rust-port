@@ -1,0 +1,72 @@
+import { Palette, Metrics, Card, StatRow } from "../theme.slint";
+
+export component AboutPage inherits VerticalLayout {
+    in property <string> version;
+    in property <string> daemon-version;
+    in property <string> machine;
+    in property <string> family;
+    in property <string> profile-driver;
+    in property <image> logo;
+
+    spacing: Metrics.gap;
+
+    Card {
+        HorizontalLayout {
+            spacing: 14px;
+
+            Image {
+                source: root.logo;
+                width: 64px;
+                height: 64px;
+                image-fit: contain;
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+
+                Text {
+                    text: "Legion Toolkit";
+                    color: Palette.text;
+                    font-size: 20px;
+                    font-weight: 700;
+                }
+                Text {
+                    text: "Version " + root.version;
+                    color: Palette.text-dim;
+                    font-size: 12px;
+                }
+            }
+        }
+    }
+
+    Card {
+        title: "This machine";
+        StatRow { label: "Model"; value: root.machine; }
+        StatRow { label: "Family"; value: root.family; }
+        StatRow { label: "Profile driver"; value: root.profile-driver; }
+        StatRow { label: "Daemon"; value: root.daemon-version; }
+    }
+
+    Card {
+        title: "How this works";
+        Text {
+            text: "All hardware access goes through the legiond system daemon over D-Bus. "
+                + "The daemon talks to the upstream lenovo-wmi-gamezone, lenovo-wmi-other and "
+                + "ideapad_laptop drivers in the mainline kernel — no out-of-tree modules and "
+                + "no DKMS.";
+            color: Palette.text-dim;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+        Text {
+            text: "Fan curves, RGB lighting and GPU overclocking are not offered: this machine's "
+                + "kernel drivers expose no interface for them.";
+            color: Palette.text-dim;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+    }
+
+    Rectangle { vertical-stretch: 1; }
+}

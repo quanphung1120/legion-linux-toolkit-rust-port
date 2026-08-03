@@ -1,0 +1,124 @@
+// One palette for the whole app. The old PyQt build carried per-widget
+// stylesheet strings; everything here goes through these globals instead.
+
+export global Palette {
+    in-out property <bool> dark: true;
+
+    out property <brush> bg: dark ? #12141a : #f5f6f8;
+    out property <brush> surface: dark ? #1b1e26 : #ffffff;
+    out property <brush> surface-alt: dark ? #232733 : #eceef2;
+    out property <brush> border: dark ? #2e3340 : #d8dbe2;
+    out property <brush> text: dark ? #e8eaf0 : #1a1c22;
+    out property <brush> text-dim: dark ? #99a0b0 : #5c6270;
+    out property <brush> accent: #d32f2f;      // Legion red
+    out property <brush> accent-dim: #8e2020;
+    out property <brush> ok: #3fbf6f;
+    out property <brush> warn: #e0a32e;
+}
+
+export global Metrics {
+    out property <length> radius: 10px;
+    out property <length> gap: 12px;
+    out property <length> pad: 16px;
+}
+
+// A titled container used by every page.
+export component Card inherits Rectangle {
+    in property <string> title;
+
+    background: Palette.surface;
+    border-radius: Metrics.radius;
+    border-width: 1px;
+    border-color: Palette.border;
+
+    VerticalLayout {
+        padding: Metrics.pad;
+        spacing: Metrics.gap;
+
+        if title != "": Text {
+            text: root.title;
+            color: Palette.text;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        @children
+    }
+}
+
+// A label/value row.
+export component StatRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+
+    spacing: 8px;
+
+    Text {
+        text: root.label;
+        color: Palette.text-dim;
+        font-size: 13px;
+        vertical-alignment: center;
+    }
+
+    Rectangle { horizontal-stretch: 1; }
+
+    Text {
+        text: root.value;
+        color: Palette.text;
+        font-size: 13px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+}
+
+export component ToggleRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> hint;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+
+    spacing: 8px;
+    height: 34px;
+
+    VerticalLayout {
+        alignment: center;
+        Text {
+            text: root.label;
+            color: root.enabled ? Palette.text : Palette.text-dim;
+            font-size: 13px;
+        }
+        if root.hint != "": Text {
+            text: root.hint;
+            color: Palette.text-dim;
+            font-size: 11px;
+        }
+    }
+
+    Rectangle { horizontal-stretch: 1; }
+
+    switch := TouchArea {
+        width: 46px;
+        height: 24px;
+        enabled: root.enabled;
+        clicked => { root.toggled(!root.checked); }
+
+        Rectangle {
+            border-radius: 12px;
+            background: root.checked ? Palette.accent : Palette.surface-alt;
+            border-width: 1px;
+            border-color: Palette.border;
+            opacity: root.enabled ? 1.0 : 0.45;
+
+            knob := Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+                background: white;
+                x: root.checked ? parent.width - self.width - 3px : 3px;
+                y: 3px;
+                animate x { duration: 120ms; easing: ease-out; }
+            }
+        }
+    }
+}

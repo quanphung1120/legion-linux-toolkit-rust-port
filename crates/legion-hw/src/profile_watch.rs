@@ -1,50 +1,53 @@
-//! Blocking watcher for Fn+Q (and any other firmware-side) profile changes.
+//! The sync primitive behind Fn+Q detection.
 //!
 //! `Documentation/ABI/testing/sysfs-class-platform-profile` specifies
-//! `poll()`/`POLLPRI` on the `profile` file as *the* notification mechanism —
-//! there is no uevent or evdev event for this on the 82WM. The sequence is:
-//! open, read once to arm the notification, then `poll` for `POLLPRI`, then
-//! re-read.
+//! `poll()`/`POLLPRI` on the `profile` file as *the* notification mechanism:
+//! open the file, read once to clear the pending state, then wait for
+//! `POLLPRI` and re-read. sysfs attributes never generate inotify events, so
+//! no filesystem-watching crate can substitute for this.
 //!
-//! Only the daemon runs this; every other process learns about changes from
-//! the daemon's `PropertiesChanged` signal.
+//! This module deliberately stops at the file handle. It does no waiting of
+//! its own — the daemon registers [`ProfileWatchFd`]'s descriptor on tokio's
+//! reactor with `Interest::PRIORITY` (`EPOLLPRI`) and awaits it as an ordinary
+//! async task, so there is no dedicated blocking thread and no channel bridge.
+//!
+//! Testing note: a regular file in a fake sysfs tree can never produce
+//! `POLLPRI`, so only [`ProfileWatchFd::consume`]'s parse path is unit-tested;
+//! the wakeup itself is verified on hardware.
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use std::time::Duration;
-
-use rustix::event::{PollFd, PollFlags, Timespec, poll};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd};
 
 use crate::profile::{self, PROFILE_FILE, PowerProfile};
 use crate::{HwError, Result, SysRoot};
 
-/// A file handle armed for `POLLPRI` notifications on the profile attribute.
-pub struct ProfileWatcher {
+/// An open handle to the `profile` attribute, armed for `POLLPRI`.
+///
+/// Register it with an async reactor and call [`consume`](Self::consume) after
+/// each wakeup.
+#[derive(Debug)]
+pub struct ProfileWatchFd {
     file: File,
 }
 
-/// Outcome of one [`ProfileWatcher::wait_for_change`] call.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WatchEvent {
-    /// The firmware changed the profile; here is the new value.
-    Changed(PowerProfile),
-    /// Nothing happened before the timeout elapsed.
-    Timeout,
-}
-
-impl ProfileWatcher {
-    /// Open the profile attribute and arm it.
-    pub fn new(root: &SysRoot) -> Result<Self> {
+impl ProfileWatchFd {
+    /// Open the profile attribute and clear its pending state.
+    ///
+    /// The initial read is what arms `POLLPRI`; without it the descriptor
+    /// reports ready immediately and forever.
+    pub fn open(root: &SysRoot) -> Result<Self> {
         let file = File::open(root.path(PROFILE_FILE)).map_err(HwError::from_io)?;
         let mut watcher = Self { file };
-        // The initial read is what arms POLLPRI; without it poll() returns
-        // immediately, forever.
-        let _ = watcher.reread()?;
+        let _ = watcher.consume()?;
         Ok(watcher)
     }
 
-    /// Rewind and read the current value.
-    fn reread(&mut self) -> Result<PowerProfile> {
+    /// Seek to the start and re-read the current profile.
+    ///
+    /// Call this once per wakeup: re-reading is also what re-arms the
+    /// notification for the next change.
+    pub fn consume(&mut self) -> Result<PowerProfile> {
         self.file
             .seek(SeekFrom::Start(0))
             .map_err(HwError::from_io)?;
@@ -55,19 +58,23 @@ impl ProfileWatcher {
         PowerProfile::from_sysfs(buf.trim())
     }
 
-    /// Block until the firmware changes the profile, or `timeout` elapses.
-    pub fn wait_for_change(&mut self, timeout: Duration) -> Result<WatchEvent> {
-        let mut fds = [PollFd::new(&self.file, PollFlags::PRI | PollFlags::ERR)];
-        let ts = Timespec {
-            tv_sec: timeout.as_secs() as _,
-            tv_nsec: timeout.subsec_nanos() as _,
-        };
-        let ready = poll(&mut fds, Some(&ts))
-            .map_err(|e| HwError::Io(std::io::Error::from_raw_os_error(e.raw_os_error())))?;
-        if ready == 0 {
-            return Ok(WatchEvent::Timeout);
-        }
-        Ok(WatchEvent::Changed(self.reread()?))
+    /// The raw descriptor, for registering with an async reactor.
+    pub fn raw_fd(&self) -> RawFd {
+        self.file.as_raw_fd()
+    }
+}
+
+impl AsFd for ProfileWatchFd {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.file.as_fd()
+    }
+}
+
+// Required by `tokio::io::unix::AsyncFd`, which is how the daemon awaits
+// EPOLLPRI on this descriptor.
+impl AsRawFd for ProfileWatchFd {
+    fn as_raw_fd(&self) -> RawFd {
+        self.file.as_raw_fd()
     }
 }
 
@@ -91,34 +98,61 @@ mod tests {
     }
 
     #[test]
-    fn watcher_opens_and_reads_initial_value() {
+    fn open_performs_the_arming_read() {
         let tmp = TempDir::new().unwrap();
         let root = fake_profile_file(&tmp, "balanced");
-        let mut w = ProfileWatcher::new(&root).unwrap();
-        assert_eq!(w.reread().unwrap(), PowerProfile::Balanced);
+        let mut w = ProfileWatchFd::open(&root).unwrap();
+        assert_eq!(w.consume().unwrap(), PowerProfile::Balanced);
     }
 
     #[test]
-    fn watcher_on_missing_file_is_not_supported() {
+    fn consume_rereads_after_the_value_changes() {
+        let tmp = TempDir::new().unwrap();
+        let root = fake_profile_file(&tmp, "balanced");
+        let mut w = ProfileWatchFd::open(&root).unwrap();
+
+        // Simulate the firmware changing the profile behind our back.
+        fs::write(
+            root.path("sys/class/platform-profile/platform-profile-0/profile"),
+            "max-power\n",
+        )
+        .unwrap();
+
+        assert_eq!(w.consume().unwrap(), PowerProfile::Extreme);
+    }
+
+    #[test]
+    fn consume_reports_an_unparseable_value() {
+        let tmp = TempDir::new().unwrap();
+        let root = fake_profile_file(&tmp, "balanced");
+        let mut w = ProfileWatchFd::open(&root).unwrap();
+
+        fs::write(
+            root.path("sys/class/platform-profile/platform-profile-0/profile"),
+            "ludicrous\n",
+        )
+        .unwrap();
+
+        assert!(matches!(w.consume(), Err(HwError::Parse(_))));
+    }
+
+    #[test]
+    fn open_on_a_missing_file_is_not_supported() {
         let tmp = TempDir::new().unwrap();
         let root = SysRoot::at(tmp.path());
         assert!(matches!(
-            ProfileWatcher::new(&root),
+            ProfileWatchFd::open(&root),
             Err(HwError::NotSupported)
         ));
     }
 
     #[test]
-    fn regular_file_poll_times_out_or_reports() {
-        // A tmpfs file is always "ready" for some poll flags, so this test only
-        // asserts the call returns rather than hangs or errors.
+    fn exposes_a_usable_descriptor() {
         let tmp = TempDir::new().unwrap();
-        let root = fake_profile_file(&tmp, "performance");
-        let mut w = ProfileWatcher::new(&root).unwrap();
-        let r = w.wait_for_change(Duration::from_millis(20)).unwrap();
-        match r {
-            WatchEvent::Timeout => {}
-            WatchEvent::Changed(p) => assert_eq!(p, PowerProfile::Performance),
-        }
+        let root = fake_profile_file(&tmp, "balanced");
+        let w = ProfileWatchFd::open(&root).unwrap();
+        assert!(w.raw_fd() >= 0);
+        // AsFd is what lets the daemon hand this to tokio's AsyncFd.
+        let _borrowed = w.as_fd();
     }
 }

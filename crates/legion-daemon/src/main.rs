@@ -140,8 +140,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     );
 
-    // Fn+Q propagation.
-    let mut profile_rx = watch::spawn(&root);
+    // Fn+Q propagation: an EPOLLPRI task on the reactor, not a thread.
+    let mut profile_watcher = watch::ProfileWatcher::new(&root);
 
     // Reapply after resume: the firmware forgets the battery mode and power
     // limits across a suspend cycle.
@@ -154,12 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         tokio::select! {
-            Some(p) = async {
-                match profile_rx.as_mut() {
-                    Some(rx) => rx.recv().await,
-                    None => std::future::pending().await,
-                }
-            } => {
+            p = watch::next_change(&mut profile_watcher) => {
                 log::info!("firmware changed profile to {}", p.as_sysfs());
                 let iface = iface_ref.get().await;
                 if let Err(e) = iface.notify_profile_changed(iface_ref.signal_emitter()).await {

@@ -20,7 +20,9 @@ slint = { workspace = true, features = [
     "compat-1-2",
     "std",
 ] }
-ksni.workspace = true
+# `blocking` gives a sync tray handle, which is what the Slint event loop
+# (a non-async context) needs in order to push state into the menu.
+ksni = { workspace = true, features = ["blocking"] }
 clap.workspace = true
 zbus.workspace = true
 tokio.workspace = true
@@ -28,6 +30,7 @@ serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
 env_logger.workspace = true
+futures-util = { version = "0.3", default-features = false }
 
 [build-dependencies]
 slint-build.workspace = true

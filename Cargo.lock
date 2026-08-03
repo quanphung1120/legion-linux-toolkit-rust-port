@@ -2671,6 +2671,7 @@ version = "1.0.0-alpha1"
 dependencies = [
  "clap",
  "env_logger",
+ "futures-util",
  "ksni",
  "legion-hw",
  "log",

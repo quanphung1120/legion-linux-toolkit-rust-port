@@ -1,0 +1,196 @@
+import { Palette, Metrics, Card } from "../theme.slint";
+
+// One power-limit slider. Disabled unless the Custom profile is active,
+// because the kernel returns EBUSY for writes in any other mode.
+component PptSlider inherits VerticalLayout {
+    in property <string> label;
+    in property <string> description;
+    in property <int> value;
+    in property <int> minimum;
+    in property <int> maximum;
+    in property <bool> enabled;
+    callback changed(int);
+
+    spacing: 4px;
+
+    HorizontalLayout {
+        Text {
+            text: root.label;
+            color: root.enabled ? Palette.text : Palette.text-dim;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Text {
+            text: root.value + " W";
+            color: root.enabled ? Palette.accent : Palette.text-dim;
+            font-size: 13px;
+            font-weight: 700;
+        }
+    }
+
+    Text {
+        text: root.description;
+        color: Palette.text-dim;
+        font-size: 11px;
+    }
+
+    track := TouchArea {
+        height: 26px;
+        enabled: root.enabled;
+
+        // Map the pointer position onto the firmware's own range.
+        function value-at(px: length) -> int {
+            return clamp(
+                root.minimum + round((px / self.width) * (root.maximum - root.minimum)),
+                root.minimum,
+                root.maximum);
+        }
+
+        clicked => { root.changed(self.value-at(self.mouse-x)); }
+        moved => {
+            if (self.pressed) {
+                root.changed(self.value-at(self.mouse-x));
+            }
+        }
+
+        Rectangle {
+            height: 6px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 3px;
+            background: Palette.surface-alt;
+            opacity: root.enabled ? 1.0 : 0.5;
+
+            fill := Rectangle {
+                x: 0;
+                height: parent.height;
+                border-radius: 3px;
+                background: root.enabled ? Palette.accent : Palette.text-dim;
+                width: root.maximum > root.minimum
+                    ? parent.width * (root.value - root.minimum) / (root.maximum - root.minimum)
+                    : 0px;
+            }
+        }
+
+        Rectangle {
+            width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            y: (parent.height - self.height) / 2;
+            x: fill.width - self.width / 2;
+            background: root.enabled ? white : Palette.text-dim;
+            border-width: 2px;
+            border-color: root.enabled ? Palette.accent : Palette.border;
+        }
+    }
+
+    HorizontalLayout {
+        Text {
+            text: root.minimum + " W";
+            color: Palette.text-dim;
+            font-size: 10px;
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Text {
+            text: root.maximum + " W";
+            color: Palette.text-dim;
+            font-size: 10px;
+        }
+    }
+}
+
+export component CustomPage inherits VerticalLayout {
+    in property <bool> supported;
+    in property <bool> custom-active;
+
+    in property <int> spl;
+    in property <int> spl-min;
+    in property <int> spl-max;
+    in property <int> sppt;
+    in property <int> sppt-min;
+    in property <int> sppt-max;
+    in property <int> fppt;
+    in property <int> fppt-min;
+    in property <int> fppt-max;
+
+    callback set-ppt(string, int);
+    callback switch-to-custom();
+
+    spacing: Metrics.gap;
+
+    Card {
+        title: "CPU Power Limits";
+
+        if !supported: Text {
+            text: "This firmware advertises no ppt_* attributes.";
+            color: Palette.text-dim;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+
+        if supported && !custom-active: HorizontalLayout {
+            spacing: 10px;
+
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: "Power limits apply only in the Custom profile.";
+                    color: Palette.warn;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            TouchArea {
+                width: 150px;
+                height: 32px;
+                clicked => { root.switch-to-custom(); }
+                Rectangle {
+                    border-radius: Metrics.radius;
+                    background: parent.has-hover ? Palette.accent : Palette.accent-dim;
+                    Text {
+                        text: "Switch to Custom";
+                        color: white;
+                        font-size: 12px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        if supported: PptSlider {
+            label: "Sustained (SPL)";
+            description: "Long-term package power the cooling can hold.";
+            value: root.spl;
+            minimum: root.spl-min;
+            maximum: root.spl-max;
+            enabled: root.custom-active;
+            changed(v) => { root.set-ppt("spl", v); }
+        }
+
+        if supported: PptSlider {
+            label: "Slow boost (SPPT)";
+            description: "Medium-duration boost ceiling.";
+            value: root.sppt;
+            minimum: root.sppt-min;
+            maximum: root.sppt-max;
+            enabled: root.custom-active;
+            changed(v) => { root.set-ppt("sppt", v); }
+        }
+
+        if supported: PptSlider {
+            label: "Fast boost (FPPT)";
+            description: "Short-burst ceiling.";
+            value: root.fppt;
+            minimum: root.fppt-min;
+            maximum: root.fppt-max;
+            enabled: root.custom-active;
+            changed(v) => { root.set-ppt("fppt", v); }
+        }
+    }
+
+    Rectangle { vertical-stretch: 1; }
+}
