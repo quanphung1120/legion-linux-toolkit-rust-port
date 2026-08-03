@@ -20,9 +20,12 @@ slint = { workspace = true, features = [
     "compat-1-2",
     "std",
 ] }
-# `blocking` gives a sync tray handle, which is what the Slint event loop
-# (a non-async context) needs in order to push state into the menu.
-ksni = { workspace = true, features = ["blocking"] }
+# ksni's default feature is "tokio", matching the zbus flavour the workspace
+# pins. Its async API is used deliberately: the `blocking` feature drives a
+# private current-thread runtime that stops being polled once spawn() returns,
+# which leaves zbus without a reactor. The tray therefore lives on our own
+# runtime instead.
+ksni.workspace = true
 clap.workspace = true
 zbus.workspace = true
 tokio.workspace = true

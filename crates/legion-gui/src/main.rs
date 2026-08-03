@@ -79,13 +79,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let handle = runtime.handle().clone();
     handle.spawn(bus_task(req_rx, evt_tx.clone()));
 
-    wire_callbacks(&ui, req_tx.clone());
+    // Slint's winit backend opens its *own* session-bus connection on this
+    // thread — `xdg_desktop_settings::watch`, which follows the desktop's
+    // colour scheme — driven by Slint's single-threaded future runner. The
+    // workspace pins zbus to its tokio flavour, so that connection needs a
+    // runtime context on whichever thread makes it, and the Slint main thread
+    // has none. Entering the runtime for the lifetime of the event loop gives
+    // it one; without this guard the process panics with "there is no reactor
+    // running" as soon as the event loop starts.
+    //
+    // This covers Slint-internal D-Bus only. Our own D-Bus work (the daemon
+    // proxy and the ksni tray) stays on the runtime's worker threads.
+    let _runtime_guard = runtime.enter();
 
-    // ── tray ────────────────────────────────────────────────────────────────
-    let tray_handle = tray::spawn(req_tx.clone(), ui.as_weak()).ok();
-    if tray_handle.is_none() {
-        log::warn!("could not register a tray icon (no StatusNotifierItem host?)");
-    }
+    wire_callbacks(&ui, req_tx.clone());
 
     if args.tray {
         // Start hidden: in tray mode the icon is the entry point.
@@ -95,21 +102,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // ── pump daemon events into Slint properties ────────────────────────────
+    //
+    // The tray is created and driven entirely from this task. ksni speaks
+    // D-Bus through zbus, which needs a live tokio reactor, so none of it may
+    // touch the Slint main thread — that thread runs the winit event loop and
+    // has no runtime context.
     let weak = ui.as_weak();
-    let tray_for_events = tray_handle.clone();
+    let tray_tx = req_tx.clone();
+    let tray_ui = ui.as_weak();
     handle.spawn(async move {
+        let tray = match tray::spawn(tray_tx, tray_ui).await {
+            Ok(t) => Some(t),
+            Err(e) => {
+                log::warn!("could not register a tray icon (no StatusNotifierItem host?): {e}");
+                None
+            }
+        };
+
         while let Some(event) = evt_rx.recv().await {
+            // Refresh the tray on the runtime side, before crossing into Slint.
+            if let (Event::Snapshot(snap), Some(t)) = (&event, tray.as_ref()) {
+                t.update(snap).await;
+            }
+
             let weak = weak.clone();
-            let tray = tray_for_events.clone();
             let _ = slint::invoke_from_event_loop(move || {
                 let Some(ui) = weak.upgrade() else { return };
                 match event {
-                    Event::Snapshot(snap) => {
-                        apply_snapshot(&ui, &snap);
-                        if let Some(t) = &tray {
-                            t.update(&snap);
-                        }
-                    }
+                    Event::Snapshot(snap) => apply_snapshot(&ui, &snap),
                     Event::Toast(msg) => ui.set_toast(SharedString::from(msg)),
                     Event::Disconnected(why) => {
                         ui.set_daemon_connected(false);

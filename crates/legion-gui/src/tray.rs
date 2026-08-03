@@ -256,26 +256,33 @@ impl ksni::Tray for Tray {
 }
 
 /// Handle used to push new daemon state into the tray.
+///
+/// Every method here must be called from the tokio runtime: ksni talks to the
+/// StatusNotifierItem host over zbus, which needs a live reactor.
 pub struct TrayHandle {
-    handle: ksni::blocking::Handle<Tray>,
+    handle: ksni::Handle<Tray>,
     last: Mutex<TrayState>,
 }
 
 impl TrayHandle {
     /// Refresh the tray from a daemon snapshot, skipping no-op updates so the
     /// menu does not churn on every one-second tick.
-    pub fn update(&self, snap: &Snapshot) {
+    pub async fn update(&self, snap: &Snapshot) {
         let next = TrayState::from_snapshot(snap);
         {
+            // Scoped so the std::sync guard is released before the await —
+            // it must never be held across a suspension point.
             let mut last = self.last.lock().unwrap();
             if *last == next {
                 return;
             }
             *last = next.clone();
         }
-        self.handle.update(move |tray: &mut Tray| {
-            tray.state = next;
-        });
+        self.handle
+            .update(move |tray: &mut Tray| {
+                tray.state = next;
+            })
+            .await;
     }
 }
 
@@ -293,18 +300,22 @@ impl PartialEq for TrayState {
 }
 
 /// Register the tray item. Fails when the session has no SNI host.
-pub fn spawn(
+///
+/// Must be awaited on the tokio runtime — ksni spawns its zbus service onto
+/// whichever runtime is current.
+pub async fn spawn(
     tx: mpsc::UnboundedSender<Request>,
     ui: slint::Weak<crate::AppWindow>,
 ) -> Result<Arc<TrayHandle>, ksni::Error> {
-    use ksni::blocking::TrayMethods;
+    use ksni::TrayMethods;
 
     let handle = Tray {
         state: TrayState::default(),
         tx,
         ui,
     }
-    .spawn()?;
+    .spawn()
+    .await?;
 
     Ok(Arc::new(TrayHandle {
         handle,
