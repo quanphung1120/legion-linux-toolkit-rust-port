@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Legion Toolkit
+Comment=Control panel for Lenovo Legion laptops
+Exec=/usr/bin/legion-gui
+Icon=legion-toolkit
+Terminal=false
+Categories=System;Settings;

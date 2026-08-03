@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Legion Toolkit Tray
+Comment=Legion Toolkit system tray
+Exec=/usr/bin/legion-gui --tray
+Icon=legion-toolkit
+Terminal=false
+Categories=System;
+X-GNOME-Autostart-enabled=true

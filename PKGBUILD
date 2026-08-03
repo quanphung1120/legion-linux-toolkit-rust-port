@@ -1,64 +1,82 @@
-# Maintainer: Your Name <your@email.com>
-# Contributor: VVAT3R
-# 
-# Legion Linux Toolkit — PyQt6 GUI/tray for Lenovo Legion laptops.
-# Requires LenovoLegionLinux (LLL) for hardware access.
-# Install LLL from AUR:
-#   yay -S lenovolegionlinux-git lenovolegionlinux-dkms-git
-# Or from chaotic-aur / cachyos repos.
+# Maintainer: VVAT3R
+#
+# Legion Linux Toolkit — Rust daemon, Slint GUI/tray and CLI for Lenovo Legion
+# laptops. Hardware access uses the upstream lenovo-wmi-* and ideapad_laptop
+# kernel drivers; no DKMS module and no LenovoLegionLinux dependency.
 
 pkgname=legion-linux-toolkit
-pkgver=0.7.0
+pkgver=1.0.0alpha1
 pkgrel=1
-pkgdesc="PyQt6 GUI and system tray for Lenovo Legion laptops (LLL backend)"
-arch=('any')
+pkgdesc="Daemon, GUI, tray and CLI for Lenovo Legion laptops (upstream lenovo-wmi drivers)"
+arch=('x86_64')
 url="https://github.com/VVAT3R/legion-linux-toolkit"
-license=('GPL3')
+license=('MIT')
 depends=(
-    'python-pyqt6'
-    'python'
-    'libnotify'
-    'qt6-wayland'
+    'dbus'
+    'polkit'
+    'fontconfig'
+    'libxkbcommon'
 )
+makedepends=('cargo' 'pkgconf')
 optdepends=(
-    'lenovolegionlinux-git: LLL kernel module + Python library (AUR)'
-    'lenovolegionlinux-dkms-git: LLL DKMS kernel module (AUR)'
+    'gnome-shell-extension-appindicator: tray icon support on GNOME'
 )
-makedepends=('git')
-install=legion-linux-toolkit.install
+# The daemon binary is named legiond, which collides with LenovoLegionLinux's
+# C daemon of the same name.
+conflicts=('lenovolegionlinux' 'lenovolegionlinux-git')
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/VVAT3R/legion-linux-toolkit/archive/v${pkgver}.tar.gz")
 sha256sums=('SKIP')
+
+prepare() {
+    cd "${srcdir}/${pkgname}-${pkgver}"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "${srcdir}/${pkgname}-${pkgver}"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo build --release --locked --workspace
+}
+
+check() {
+    cd "${srcdir}/${pkgname}-${pkgver}"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo test --release --locked --workspace
+}
 
 package() {
     cd "${srcdir}/${pkgname}-${pkgver}"
 
-    # Core library
-    install -dm755 "${pkgdir}/usr/lib/legion-toolkit/lib"
-    install -m755 lib/lll_adapter.py "${pkgdir}/usr/lib/legion-toolkit/lib/"
+    install -Dm755 target/release/legiond    "${pkgdir}/usr/bin/legiond"
+    install -Dm755 target/release/legion-ctl "${pkgdir}/usr/bin/legion-ctl"
+    install -Dm755 target/release/legion-gui "${pkgdir}/usr/bin/legion-gui"
 
-    # GUI + Tray
-    install -m755 tray/legion-gui.py  "${pkgdir}/usr/lib/legion-toolkit/"
-    install -m755 tray/legion-tray.py "${pkgdir}/usr/lib/legion-toolkit/"
-    install -m644 tray/kernel_check.py "${pkgdir}/usr/lib/legion-toolkit/"
+    install -Dm644 systemd/legiond.service \
+        "${pkgdir}/usr/lib/systemd/system/legiond.service"
+    install -Dm644 dbus/org.legiontoolkit.Daemon.conf \
+        "${pkgdir}/usr/share/dbus-1/system.d/org.legiontoolkit.Daemon.conf"
+    install -Dm644 polkit/org.legion-toolkit.policy \
+        "${pkgdir}/usr/share/polkit-1/actions/org.legiontoolkit.policy"
 
-    # Scripts
-    install -m755 scripts/legion-helper.sh "${pkgdir}/usr/lib/legion-toolkit/"
-    install -dm755 "${pkgdir}/usr/local/bin"
-    install -m755 scripts/legion-ctl "${pkgdir}/usr/local/bin/"
+    install -Dm644 desktop/legion-toolkit.desktop \
+        "${pkgdir}/usr/share/applications/legion-toolkit.desktop"
+    install -Dm644 desktop/legion-toolkit-tray.desktop \
+        "${pkgdir}/etc/xdg/autostart/legion-toolkit-tray.desktop"
 
-    # Polkit rules (passwordless pkexec for helper)
-    install -dm755 "${pkgdir}/etc/polkit-1/rules.d"
-    install -m644 polkit/49-legion-toolkit.rules "${pkgdir}/etc/polkit-1/rules.d/"
+    install -Dm644 logo.png \
+        "${pkgdir}/usr/share/icons/hicolor/512x512/apps/legion-toolkit.png"
+    # The tray asks its host for icons by name, one per power profile.
+    for icon in legion-toolkit legion-toolkit-quiet legion-toolkit-balanced \
+                legion-toolkit-performance legion-toolkit-extreme \
+                legion-toolkit-custom; do
+        install -Dm644 "crates/legion-gui/assets/${icon}.png" \
+            "${pkgdir}/usr/share/icons/hicolor/64x64/apps/${icon}.png"
+    done
 
-    # Polkit action (legacy, kept for compatibility)
-    install -dm755 "${pkgdir}/usr/share/polkit-1/actions"
-    install -m644 tray/org.legion-toolkit.policy "${pkgdir}/usr/share/polkit-1/actions/"
-
-    # udev rules (keyboard RGB permissions)
-    install -dm755 "${pkgdir}/etc/udev/rules.d"
-    install -m644 udev/99-legion-toolkit.rules "${pkgdir}/etc/udev/rules.d/"
-
-    # Autostart
-    install -dm755 "${pkgdir}/etc/xdg/autostart"
-    install -m644 tray/legion-toolkit.desktop "${pkgdir}/etc/xdg/autostart/"
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }
+
+# post_install: enable the daemon with
+#   sudo systemctl enable --now legiond

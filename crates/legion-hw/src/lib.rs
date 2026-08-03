@@ -7,7 +7,8 @@
 //!
 //! The ABI targeted is the upstream `lenovo-wmi-*` + `ideapad_laptop` driver
 //! stack (kernel 6.17+, verified on 7.0). The out-of-tree LenovoLegionLinux
-//! `legion_laptop` module is explicitly *not* used.
+//! kernel module is explicitly *not* used, and none of its sysfs paths appear
+//! anywhere in this crate.
 //!
 //! Writes here go straight to sysfs, so they succeed for root (the daemon) and
 //! fail with [`HwError::PermissionDenied`] for anyone else. Unprivileged

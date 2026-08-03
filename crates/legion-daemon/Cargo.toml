@@ -26,3 +26,44 @@ futures-util = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 tempfile.workspace = true
+
+# `cargo deb -p legion-daemon` builds the whole user-facing package, so the
+# asset list mirrors the Makefile's install target.
+[package.metadata.deb]
+name = "legion-linux-toolkit"
+maintainer = "Legion Linux Toolkit contributors"
+copyright = "Legion Linux Toolkit contributors"
+license-file = ["../../LICENSE", "0"]
+extended-description = """
+Control panel, tray and CLI for Lenovo Legion laptops, built on the upstream
+lenovo-wmi-gamezone, lenovo-wmi-other and ideapad_laptop kernel drivers.
+Hardware access goes through the legiond system daemon over D-Bus.
+"""
+section = "utils"
+priority = "optional"
+depends = "$auto, libfontconfig1, dbus, policykit-1 | polkit"
+conflicts = "lenovolegionlinux"
+assets = [
+    ["../../target/release/legiond", "usr/bin/", "755"],
+    ["../../target/release/legion-ctl", "usr/bin/", "755"],
+    ["../../target/release/legion-gui", "usr/bin/", "755"],
+    ["../../dbus/org.legiontoolkit.Daemon.conf", "usr/share/dbus-1/system.d/", "644"],
+    ["../../polkit/org.legion-toolkit.policy", "usr/share/polkit-1/actions/org.legiontoolkit.policy", "644"],
+    ["../../desktop/legion-toolkit.desktop", "usr/share/applications/", "644"],
+    ["../../desktop/legion-toolkit-tray.desktop", "etc/xdg/autostart/", "644"],
+    ["../../logo.png", "usr/share/icons/hicolor/512x512/apps/legion-toolkit.png", "644"],
+    ["../legion-gui/assets/legion-toolkit.png", "usr/share/icons/hicolor/64x64/apps/legion-toolkit.png", "644"],
+    ["../legion-gui/assets/legion-toolkit-quiet.png", "usr/share/icons/hicolor/64x64/apps/", "644"],
+    ["../legion-gui/assets/legion-toolkit-balanced.png", "usr/share/icons/hicolor/64x64/apps/", "644"],
+    ["../legion-gui/assets/legion-toolkit-performance.png", "usr/share/icons/hicolor/64x64/apps/", "644"],
+    ["../legion-gui/assets/legion-toolkit-extreme.png", "usr/share/icons/hicolor/64x64/apps/", "644"],
+    ["../legion-gui/assets/legion-toolkit-custom.png", "usr/share/icons/hicolor/64x64/apps/", "644"],
+]
+
+# Installs and enables legiond.service.
+[package.metadata.deb.systemd-units]
+unit-name = "legiond"
+unit-scripts = "../../systemd"
+enable = true
+start = true
+restart-after-upgrade = true

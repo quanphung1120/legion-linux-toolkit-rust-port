@@ -1,36 +1,49 @@
-PREFIX ?= /usr
-LIBDIR  = $(PREFIX)/lib/legion-toolkit
-BINDIR  = $(PREFIX)/local/bin
-POLKIT  = $(PREFIX)/share/polkit-1/rules.d
-UDEV    = /etc/udev/rules.d
-POLKIT_ACTIONS = $(PREFIX)/share/polkit-1/actions
-AUTOSTART = /etc/xdg/autostart
+PREFIX        ?= /usr
+BIN            = $(DESTDIR)$(PREFIX)/bin
+UNITDIR        = $(DESTDIR)$(PREFIX)/lib/systemd/system
+DBUSDIR        = $(DESTDIR)$(PREFIX)/share/dbus-1/system.d
+POLKIT_ACTIONS = $(DESTDIR)$(PREFIX)/share/polkit-1/actions
+APPS           = $(DESTDIR)$(PREFIX)/share/applications
+AUTOSTART      = $(DESTDIR)/etc/xdg/autostart
+ICONS          = $(DESTDIR)$(PREFIX)/share/icons/hicolor/512x512/apps
+TRAY_ICONS     = $(DESTDIR)$(PREFIX)/share/icons/hicolor/64x64/apps
 
-.PHONY: install uninstall
+# The tray asks its host for icons by name (legion-toolkit-<profile>), so the
+# pre-rendered PNGs must land in the hicolor theme alongside the app icon.
+TRAY_ICON_NAMES = legion-toolkit legion-toolkit-quiet legion-toolkit-balanced \
+                  legion-toolkit-performance legion-toolkit-extreme \
+                  legion-toolkit-custom
+
+.PHONY: build deb install uninstall
+
+build:
+	cargo build --release --workspace
+
+deb:
+	cargo deb -p legion-daemon
 
 install:
-	install -d $(DESTDIR)$(LIBDIR)
-	install -d $(DESTDIR)$(LIBDIR)/lib
-	install -m755 tray/legion-gui.py  $(DESTDIR)$(LIBDIR)/
-	install -m755 tray/legion-tray.py $(DESTDIR)$(LIBDIR)/
-	install -m644 tray/kernel_check.py $(DESTDIR)$(LIBDIR)/
-	install -m644 lib/lll_adapter.py   $(DESTDIR)$(LIBDIR)/lib/
-	install -m755 scripts/legion-helper.sh $(DESTDIR)$(LIBDIR)/
-	install -m755 scripts/legion-ctl  $(DESTDIR)$(BINDIR)/legion-ctl
-	install -d $(DESTDIR)$(POLKIT)
-	install -m644 polkit/49-legion-toolkit.rules $(DESTDIR)$(POLKIT)/
-	install -m644 tray/org.legion-toolkit.policy $(DESTDIR)$(POLKIT_ACTIONS)/
-	install -d $(DESTDIR)$(UDEV)
-	install -m644 udev/99-legion-toolkit.rules $(DESTDIR)$(UDEV)/
-	install -d $(DESTDIR)$(AUTOSTART)
-	install -m644 tray/legion-toolkit.desktop $(DESTDIR)$(AUTOSTART)/
-	udevadm control --reload-rules 2>/dev/null || true
+	install -Dm755 target/release/legiond    $(BIN)/legiond
+	install -Dm755 target/release/legion-ctl $(BIN)/legion-ctl
+	install -Dm755 target/release/legion-gui $(BIN)/legion-gui
+	install -Dm644 systemd/legiond.service   $(UNITDIR)/legiond.service
+	install -Dm644 dbus/org.legiontoolkit.Daemon.conf $(DBUSDIR)/org.legiontoolkit.Daemon.conf
+	install -Dm644 polkit/org.legion-toolkit.policy $(POLKIT_ACTIONS)/org.legiontoolkit.policy
+	install -Dm644 desktop/legion-toolkit.desktop $(APPS)/legion-toolkit.desktop
+	install -Dm644 desktop/legion-toolkit-tray.desktop $(AUTOSTART)/legion-toolkit-tray.desktop
+	install -Dm644 logo.png $(ICONS)/legion-toolkit.png
+	for icon in $(TRAY_ICON_NAMES); do \
+	    install -Dm644 crates/legion-gui/assets/$$icon.png $(TRAY_ICONS)/$$icon.png; \
+	done
 
 uninstall:
-	rm -rf $(DESTDIR)$(LIBDIR)
-	rm -f $(DESTDIR)$(BINDIR)/legion-ctl
-	rm -f $(DESTDIR)$(POLKIT)/49-legion-toolkit.rules
-	rm -f $(DESTDIR)$(POLKIT_ACTIONS)/org.legion-toolkit.policy
-	rm -f $(DESTDIR)$(UDEV)/99-legion-toolkit.rules
-	rm -f $(DESTDIR)$(AUTOSTART)/legion-toolkit.desktop
-	udevadm control --reload-rules 2>/dev/null || true
+	rm -f $(BIN)/legiond $(BIN)/legion-ctl $(BIN)/legion-gui
+	rm -f $(UNITDIR)/legiond.service
+	rm -f $(DBUSDIR)/org.legiontoolkit.Daemon.conf
+	rm -f $(POLKIT_ACTIONS)/org.legiontoolkit.policy
+	rm -f $(APPS)/legion-toolkit.desktop
+	rm -f $(AUTOSTART)/legion-toolkit-tray.desktop
+	rm -f $(ICONS)/legion-toolkit.png
+	for icon in $(TRAY_ICON_NAMES); do \
+	    rm -f $(TRAY_ICONS)/$$icon.png; \
+	done
