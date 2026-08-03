@@ -135,12 +135,17 @@ pub fn format_freq(khz: Option<u64>) -> String {
     }
 }
 
-/// Format fan speed. `None` is the normal state on this kernel, so it says why
-/// rather than showing a blank.
+/// Format fan speed.
+///
+/// `None` is the *expected* state on this machine — kernel 7.0 exposes no fan
+/// hwmon for it, and upstream's `lenovo-wmi-other` fan sensors are newer than
+/// that. So the text names the reason rather than showing a dash or "0 RPM",
+/// both of which read as a fault. It resolves itself on a newer kernel:
+/// `fan::readings()` scans rather than hardcoding.
 pub fn format_fan(rpm: Option<u32>) -> String {
     match rpm {
         Some(r) => format!("{r} RPM"),
-        None => "not reported".into(),
+        None => "No fan sensor (kernel too old)".into(),
     }
 }
 
@@ -338,9 +343,14 @@ mod tests {
     }
 
     #[test]
-    fn absent_fan_reads_as_not_reported_not_zero() {
-        // Showing "0 RPM" would imply the fan is stopped, which is wrong.
-        assert_eq!(format_fan(None), "not reported");
+    fn absent_fan_explains_itself_rather_than_showing_zero() {
+        // "0 RPM" would imply the fan is stopped and a bare dash reads as a
+        // fault; on this machine the sensor simply does not exist yet.
+        let text = format_fan(None);
+        assert_eq!(text, "No fan sensor (kernel too old)");
+        assert!(!text.contains("0 RPM"));
+        assert_ne!(text, "—");
+
         assert_eq!(format_fan(Some(2400)), "2400 RPM");
     }
 

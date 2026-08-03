@@ -190,11 +190,15 @@ async fn bus_task(
 
     // PropertiesChanged keeps the GUI in step with Fn+Q, the CLI and the tray,
     // so no client ever needs its own POLLPRI watcher.
-    let mut changes = daemon
-        .proxy()
-        .receive_signal("org.freedesktop.DBus.Properties.PropertiesChanged")
-        .await
-        .ok();
+    let mut changes = match daemon.receive_properties_changed().await {
+        Ok(s) => Some(s),
+        Err(e) => {
+            // Not fatal — the window still works, it just stops reflecting
+            // changes made elsewhere. Say so rather than failing silently.
+            log::warn!("not subscribed to PropertiesChanged, external changes will not show: {e}");
+            None
+        }
+    };
 
     loop {
         tokio::select! {
@@ -208,12 +212,19 @@ async fn bus_task(
                 refresh(&daemon, &evt_tx).await;
             }
 
-            Some(_) = async {
+            Some(signal) = async {
                 match changes.as_mut() {
                     Some(s) => s.next().await,
                     None => std::future::pending().await,
                 }
             } => {
+                if let Ok(args) = signal.args() {
+                    log::debug!(
+                        "PropertiesChanged on {}: {:?} — refreshing",
+                        args.interface_name,
+                        args.changed_properties.keys().collect::<Vec<_>>()
+                    );
+                }
                 refresh(&daemon, &evt_tx).await;
             }
         }

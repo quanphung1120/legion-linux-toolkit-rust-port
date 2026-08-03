@@ -88,8 +88,33 @@ impl Daemon {
         Ok(Self { proxy })
     }
 
-    pub fn proxy(&self) -> &zbus::Proxy<'static> {
-        &self.proxy
+    /// Subscribe to `org.freedesktop.DBus.Properties.PropertiesChanged` for
+    /// this daemon object.
+    ///
+    /// It has to go through [`zbus::fdo::PropertiesProxy`] rather than
+    /// `Proxy::receive_signal` on our own proxy: `receive_signal` takes a
+    /// *member* name and matches it against the proxy's own interface
+    /// (`org.legiontoolkit.Daemon1`), whereas this signal's member is
+    /// `PropertiesChanged` on the separate `org.freedesktop.DBus.Properties`
+    /// interface. Passing the fully-qualified name there matches nothing —
+    /// member names cannot contain dots — so the GUI silently stopped seeing
+    /// Fn+Q and legion-ctl changes.
+    pub async fn receive_properties_changed(
+        &self,
+    ) -> Result<zbus::fdo::PropertiesChangedStream, String> {
+        let properties = zbus::fdo::PropertiesProxy::builder(self.proxy.connection())
+            .destination(BUS_NAME)
+            .map_err(|e| e.to_string())?
+            .path(OBJECT_PATH)
+            .map_err(|e| e.to_string())?
+            .build()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        properties
+            .receive_properties_changed()
+            .await
+            .map_err(|e| e.to_string())
     }
 
     /// Read every property the UI needs.
