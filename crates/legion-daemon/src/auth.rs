@@ -45,9 +45,10 @@ impl Authorizer {
                 &subject,
                 ACTION_ID,
                 &std::collections::HashMap::new(),
-                // No interactive prompt from the daemon: with allow_active=yes
-                // the desktop user never needs one, and an inactive session
-                // has no agent to prompt on. The client gets a clean denial.
+                // AllowUserInteraction lets a session with a polkit agent
+                // satisfy allow_inactive=auth_admin; the active desktop user
+                // never sees a prompt (allow_active=yes), and agent-less
+                // sessions (plain SSH) get a clean denial.
                 CheckAuthorizationFlags::AllowUserInteraction.into(),
                 "",
             )
