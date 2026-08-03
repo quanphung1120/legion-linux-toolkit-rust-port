@@ -1,0 +1,24 @@
+[package]
+name = "legion-ctl"
+description = "Command-line client for the Legion Toolkit daemon"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "legion-ctl"
+path = "src/main.rs"
+
+[dependencies]
+legion-hw = { path = "../legion-hw" }
+clap.workspace = true
+zbus.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+tempfile.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "legion-hw"
+description = "Hardware backend for Lenovo Legion laptops over the upstream lenovo-wmi sysfs ABI"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rustix.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,27 @@
+[package]
+name = "legion-daemon"
+description = "legiond — root D-Bus daemon controlling Lenovo Legion laptop hardware"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "legiond"
+path = "src/main.rs"
+
+[dependencies]
+legion-hw = { path = "../legion-hw" }
+clap.workspace = true
+zbus.workspace = true
+zbus_polkit.workspace = true
+logind-zbus.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,33 @@
+[package]
+name = "legion-gui"
+description = "Slint dashboard and tray for the Legion Toolkit daemon"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "legion-gui"
+path = "src/main.rs"
+
+[dependencies]
+legion-hw = { path = "../legion-hw" }
+slint = { workspace = true, features = [
+    "backend-winit-wayland",
+    "backend-winit-x11",
+    "renderer-femtovg",
+    "compat-1-2",
+    "std",
+] }
+ksni.workspace = true
+clap.workspace = true
+zbus.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+
+[build-dependencies]
+slint-build.workspace = true

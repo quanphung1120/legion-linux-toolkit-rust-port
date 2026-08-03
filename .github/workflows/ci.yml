@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Slint's Linux build prerequisites, per slint-ui/slint docs/building.md:
+      # libfontconfig-dev is required by every renderer; libxkbcommon/libxcb are
+      # required because we enable backend-winit-x11 alongside Wayland.
+      # `dbus` provides `dbus-run-session`, used by the legion-daemon
+      # integration test (preinstalled on ubuntu-latest, but pinning it here
+      # keeps the job honest if the image changes).
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config dbus \
+            libfontconfig-dev libxkbcommon-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
