@@ -8,7 +8,7 @@ before starting, honor its STOP conditions, and update your row when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001  | Rewrite in Rust (Slint GUI + ksni tray) on the upstream lenovo-wmi ABI | P1 | L | — | DONE (2026-08-03; executed by opus, reviewed & approved, merged to main at e9cfeaa; on-hardware checks pending: Fn+Q propagation, polkit active/inactive, tray on GNOME, `make deb`) |
+| 001  | Rewrite in Rust (Slint GUI + ksni tray) on the upstream lenovo-wmi ABI | P1 | L | — | DONE (2026-08-03; executed by opus, reviewed & approved, merged to main at e9cfeaa; owner confirmed on hardware 2026-08-03: Fn+Q/external profile changes now update the GUI live (fix 3bf410e). Still unchecked: polkit active/inactive, `make deb`, long-session tray) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
