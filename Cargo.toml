@@ -13,7 +13,7 @@ repository = "https://github.com/VVAT3R/legion-linux-toolkit"
 slint = { version = "1.17", default-features = false }
 slint-build = "1.17"
 ksni = "0.3"
-zbus = "5"
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 zbus_polkit = "5"
 logind-zbus = "5"
 clap = { version = "4", features = ["derive"] }

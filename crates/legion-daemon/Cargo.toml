@@ -22,6 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
 env_logger.workspace = true
+futures-util = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 tempfile.workspace = true

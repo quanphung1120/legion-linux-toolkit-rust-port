@@ -1,0 +1,14 @@
+[Unit]
+Description=Legion Toolkit hardware control daemon
+
+[Service]
+Type=dbus
+BusName=org.legiontoolkit.Daemon
+ExecStart=/usr/bin/legiond
+Restart=on-failure
+StateDirectory=legiond
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
